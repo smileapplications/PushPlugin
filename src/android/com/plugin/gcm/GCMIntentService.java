@@ -8,10 +8,14 @@ import android.app.Notification;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Context;
+import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
 import android.content.Intent;
 import android.os.Bundle;
 import android.support.v4.app.NotificationCompat;
 import android.util.Log;
+
+import java.util.List;
 
 import com.google.android.gcm.GCMBaseIntentService;
 
@@ -19,7 +23,7 @@ import com.google.android.gcm.GCMBaseIntentService;
 public class GCMIntentService extends GCMBaseIntentService {
 
 	private static final String TAG = "GCMIntentService";
-	
+
 	public GCMIntentService() {
 		super("GCMIntentService");
 	}
@@ -89,7 +93,7 @@ public class GCMIntentService extends GCMBaseIntentService {
 		notificationIntent.putExtra("pushBundle", extras);
 
 		PendingIntent contentIntent = PendingIntent.getActivity(this, 0, notificationIntent, PendingIntent.FLAG_UPDATE_CURRENT);
-		
+
 		int defaults = Notification.DEFAULT_ALL;
 
 		if (extras.getString("defaults") != null) {
@@ -97,7 +101,7 @@ public class GCMIntentService extends GCMBaseIntentService {
 				defaults = Integer.parseInt(extras.getString("defaults"));
 			} catch (NumberFormatException e) {}
 		}
-		
+
 		NotificationCompat.Builder mBuilder =
 			new NotificationCompat.Builder(context)
 				.setDefaults(defaults)
@@ -118,10 +122,11 @@ public class GCMIntentService extends GCMBaseIntentService {
 		String msgcnt = extras.getString("msgcnt");
 		if (msgcnt != null) {
 			mBuilder.setNumber(Integer.parseInt(msgcnt));
+			setBadge(context, Integer.parseInt(msgcnt));
 		}
-		
+
 		int notId = 0;
-		
+
 		try {
 			notId = Integer.parseInt(extras.getString("notId"));
 		}
@@ -131,20 +136,50 @@ public class GCMIntentService extends GCMBaseIntentService {
 		catch(Exception e) {
 			Log.e(TAG, "Number format exception - Error parsing Notification ID" + e.getMessage());
 		}
-		
+
 		mNotificationManager.notify((String) appName, notId, mBuilder.build());
 	}
-	
+
+	public static void setBadge(Context context, int count) {
+    String launcherClassName = getLauncherClassName(context);
+    if (launcherClassName == null) {
+        return;
+    }
+    Intent intent = new Intent("android.intent.action.BADGE_COUNT_UPDATE");
+    intent.putExtra("badge_count", count);
+    intent.putExtra("badge_count_package_name", context.getPackageName());
+    intent.putExtra("badge_count_class_name", launcherClassName);
+    context.sendBroadcast(intent);
+}
+
+public static String getLauncherClassName(Context context) {
+
+    PackageManager pm = context.getPackageManager();
+
+    Intent intent = new Intent(Intent.ACTION_MAIN);
+    intent.addCategory(Intent.CATEGORY_LAUNCHER);
+
+    List<ResolveInfo> resolveInfos = pm.queryIntentActivities(intent, 0);
+    for (ResolveInfo resolveInfo : resolveInfos) {
+        String pkgName = resolveInfo.activityInfo.applicationInfo.packageName;
+        if (pkgName.equalsIgnoreCase(context.getPackageName())) {
+            String className = resolveInfo.activityInfo.name;
+            return className;
+        }
+    }
+    return null;
+}
+
 	private static String getAppName(Context context)
 	{
-		CharSequence appName = 
+		CharSequence appName =
 				context
 					.getPackageManager()
 					.getApplicationLabel(context.getApplicationInfo());
-		
+
 		return (String)appName;
 	}
-	
+
 	@Override
 	public void onError(Context context, String errorId) {
 		Log.e(TAG, "onError - errorId: " + errorId);
